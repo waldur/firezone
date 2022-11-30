@@ -1,47 +1,25 @@
-# Example compose file for production deployment on Linux.
-#
-# Note: This file is meant to serve as a template. Please modify it
-# according to your needs. Read more about Docker Compose:
-#
-# https://docs.docker.com/compose/compose-file/
-#
-#
-x-deploy: &default-deploy
-  restart_policy:
-    condition: on-failure
-    delay: 5s
-    max_attempts: 3
-    window: 120s
-  update_config:
-    order: start-first
-
 version: '3.7'
 
 services:
   caddy:
-    image: caddy:2
+    image: ${DOCKER_REGISTRY_PREFIX}caddy:2
     volumes:
-      - ${FZ_INSTALL_DIR:-.}/caddy:/data/caddy
-    # See Caddy's documentation for customizing this line
-    # https://caddyserver.com/docs/quick-starts/reverse-proxy
-    command: caddy reverse-proxy --from ${EXTERNAL_URL:-localhost} --to 172.25.0.100:13000
-    network_mode: "host"
-    deploy:
-      <<: *default-deploy
+      - caddy-data:/data/caddy
+    command: caddy reverse-proxy --from ${EXTERNAL_URL:-localhost} --to firezone:13000
+    ports:
+      - 80:80
+      - 443:443
 
   firezone:
-    image: firezone/firezone
+    image: ${DOCKER_REGISTRY_PREFIX}firezone/firezone
     ports:
       - 51820:51820/udp
+    volumes:
+      - firezone-data:/var/firezone
     env_file:
       # This should contain a list of env vars for configuring Firezone.
       # See https://docs.firezone.dev/reference/env-vars for more info.
       - ${FZ_INSTALL_DIR:-.}/.env
-    volumes:
-      # IMPORTANT: Persists WireGuard private key and other data. If
-      # /var/firezone/private_key exists when Firezone starts, it is
-      # used as the WireGuard private. Otherwise, one is generated.
-      - ${FZ_INSTALL_DIR:-.}/firezone:/var/firezone
     cap_add:
       # Needed for WireGuard and firewall support.
       - NET_ADMIN
@@ -53,34 +31,18 @@ services:
       - net.ipv6.conf.all.forwarding=1
     depends_on:
       - postgres
-    networks:
-      firezone-network:
-        ipv4_address: 172.25.0.100
-    deploy:
-      <<: *default-deploy
 
   postgres:
-    image: postgres:15
+    image: ${DOCKER_REGISTRY_PREFIX}postgres:15
     volumes:
       - postgres-data:/var/lib/postgresql/data
     environment:
       POSTGRES_DB: ${DATABASE_NAME:-firezone}
       POSTGRES_USER: ${DATABASE_USER:-postgres}
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD:?err}
-    networks:
-      - firezone-network
-    deploy:
-      <<: *default-deploy
-      update_config:
-        order: stop-first
 
 # Postgres needs a named volume to prevent perms issues on non-linux platforms
 volumes:
   postgres-data:
-
-networks:
-  firezone-network:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.25.0.0/16
+  caddy-data:
+  firezone-data:
