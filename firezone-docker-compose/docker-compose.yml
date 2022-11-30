@@ -2,16 +2,17 @@ version: '3.7'
 
 services:
   caddy:
-    image: ${DOCKER_REGISTRY_PREFIX}caddy:2
+    image: ${DOCKER_REGISTRY_PREFIX}library/caddy:2
     volumes:
       - caddy-data:/data/caddy
     command: caddy reverse-proxy --from ${EXTERNAL_URL:-localhost} --to firezone:13000
     ports:
       - 80:80
       - 443:443
+    pull_policy: always
 
   firezone:
-    image: ${DOCKER_REGISTRY_PREFIX}firezone/firezone
+    image: ${DOCKER_REGISTRY_PREFIX}firezone/firezone:latest
     ports:
       - 51820:51820/udp
     volumes:
@@ -31,17 +32,18 @@ services:
       - net.ipv6.conf.all.forwarding=1
     depends_on:
       - postgres
+    pull_policy: always
 
   postgres:
-    image: ${DOCKER_REGISTRY_PREFIX}postgres:15
+    image: ${DOCKER_REGISTRY_PREFIX}library/postgres:15
     volumes:
       - postgres-data:/var/lib/postgresql/data
     environment:
       POSTGRES_DB: ${DATABASE_NAME:-firezone}
       POSTGRES_USER: ${DATABASE_USER:-postgres}
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD:?err}
+    pull_policy: always
 
-# Postgres needs a named volume to prevent perms issues on non-linux platforms
 volumes:
   postgres-data:
   caddy-data:
